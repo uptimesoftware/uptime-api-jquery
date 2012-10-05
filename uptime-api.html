@@ -1,0 +1,416 @@
+<html xmlns="http://www.w3.org/1999/html">
+<head>
+
+<!-- --------------------------------------------------------------------------------- -->
+
+<!-- (c) 2012 uptime software inc. -->
+<!-- jQuery/javascript example for querying up.time 7.x API -->
+
+<!-- --------------------------------------------------------------------------------- -->
+
+<!-- these javascript includes are required to render the jQuery elements and navgiation menu items -->
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/jquery-1.7.1.min.js"></script>
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/jquery-ui-1.8.11.min.js"></script>
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/jquery.dataTables-1.8.1.min.js"></script>
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/jquery.jstree.js"></script>
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/jquery.jgrowl_minimized-1.2.5.js"></script>
+<script type="text/javascript" src="https://d2xxmxlur82g0z.cloudfront.net/static/js/d3.v2.min.js"></script>
+
+<link href="https://d2xxmxlur82g0z.cloudfront.net/static/css/jquery-ui-2.0.custom.css" rel="stylesheet" type="text/css" />
+<link href="https://d2xxmxlur82g0z.cloudfront.net/static/css/app-2.2.css" rel="stylesheet" type="text/css" />
+<link href="https://d2xxmxlur82g0z.cloudfront.net/static/css/datatable_jui-1.1.css" rel="stylesheet" type="text/css" />
+<link href="https://d2xxmxlur82g0z.cloudfront.net/static/css/jquery.jgrowl.css" rel="stylesheet" type="text/css" />
+
+<!-- menu style sheets -->
+<link rel="stylesheet" href="https://d2xxmxlur82g0z.cloudfront.net/static/css/menu/core.css" type="text/css" media="screen">
+<link rel="stylesheet" href="https://d2xxmxlur82g0z.cloudfront.net/static/css/menu/styles/sgray.css" type="text/css" media="screen">
+<link type="text/css" rel="stylesheet" href="cluster.css"/>
+
+<!-- --------------------------------------------------------------------------------- -->
+
+<!-- some global variables we need for display -->
+<script type="text/javascript">
+    var element_status = {};
+    var total_num_elements = 0;
+    var total_num_groups = 0;
+    var total_num_monitors = 0;
+    var gAllElements = {};
+</script>
+
+<!-- include files required for this example -->
+<script type="text/javascript" src="uptime-d3-examples.js"></script>
+<script type="text/javascript" src="uptime-api-v1.0.js"></script>
+
+<script type="text/javascript">
+/*
+ -- this function is called once the page is loaded, so let's call the up.time
+ monitoring station and get some information
+ */
+$(document).ready(function () {
+    // -- store our d3 charts for pretty pictures
+    var d3_charts = {};
+
+    // -- where are we calling the up.time monitoring station?
+    uptimeSetAPIInfo( 'https://win-dleith:9997/api/v1', 'admin', 'admin' );
+
+    // -- the following three functions: groupIdSort, findParent, and groupsToJsTree
+    //    are used to render the JSON data structure from the up.time monitoring station
+    //    into something consumable by the JsTree jQuery component
+    function groupIdSort(a, b) {
+        var c1 = a.groupId;
+        var c2 = b.groupId;
+        if (a.groupId == null) {
+            c1 = 0;
+        }
+        if (b.groupId == null) {
+            c2 = 0;
+        }
+        return ( c1 - c2 );
+    }
+
+    function findParent(tree, groupId) {
+        // -- descend through the tree to find the parent group with groupId
+        var parent = null;
+        for (var item in tree) {
+            if (tree[item].attributes.id == groupId) {
+                return tree[item];
+            }
+            if (tree[item].children) {
+                parent = findParent(tree[item].children, groupId);
+            }
+        };
+        return parent;
+    }
+
+    function groupsToJsTree(data) {
+        var v_jstree = new Array();
+        // -- we need to transform our group list into a jsTree type list
+        // structure is:
+        // description, elements:[], groupId, id, monitors:[], name
+        // -- we need to sort data by groupId so that groups don't appear before their parent definition
+        data.sort(groupIdSort);
+
+        for (var key in data) {
+            if (!data.hasOwnProperty(key)) {
+                continue;
+            }
+            item = data[key];
+            var node = new Object();
+            node.attributes = new Array();
+            node.attributes['id'] = item.id;
+            node.state = "closed";
+
+            node.status = 'unknown';
+            node.data = item.name;
+            node.id = item.id;
+            //console.log('node = ' + item.name);
+            node.name = item.name; // -- used in d3
+            element_status[item.id] = node.status;
+            total_num_groups += 1;
+            node.children = new Array();
+            // -- let's add in all the elements of this group as well
+            for (var elem in item.elements) {
+                var element = new Object();
+                element.data = new Object();
+                element.id = item.elements[elem].id;
+                element.data['title'] = item.elements[elem].name;
+                element.data['attr'] = new Array();
+                element.data.attr['id'] = 'e-' + item.elements[elem].id;
+                element.data['icon'] = "http://www.uptimesoftware.com/favicon.ico";
+                element.attributes = new Array();
+                element.attributes['id'] = 'e-' + item.elements[elem].id;
+                element.state = "leaf";
+                element.status = "unknown";
+                element.name = item.elements[elem].name; // -- used in d3
+                node.children.push(element);
+            }
+            if (item.groupId != null) {
+                // -- we have a child group, so find the parent
+                var parent = findParent(v_jstree, item.groupId);
+                if (!parent) {
+                    // -- the parent is later in the list, so we don't know who it is
+                    console.log('Error: a child is showing up before a parent in the tree')
+                } else {
+                    parent.children.push(node);
+                }
+            } else {
+                node.state = "open";
+                v_jstree.push(node);
+            }
+        }
+        ;
+        return v_jstree[0];
+    }
+
+    // -- this function is a callback from the up.time API uptimeLoadElements(), once the
+    //    JSON data structure is returned from the monitoring station, this function is called.
+    function displayResults(data) {
+        // -- let's populate a table with the results
+        var os_type_pie = new Array();
+        $.each(data, function (index, item) {
+            total_num_elements += 1;
+            total_num_monitors += (item.monitors).length;
+            var item_id = item.id;
+            gAllElements[item_id] = item;
+            $("#element_list_tbody").append("<tr><td>" + item.name + "</td><td>" + item.typeOs + "</td></tr>");
+            var type_key = item.typeOs; // .replace(/ /g,'');
+            if (!os_type_pie[ type_key ]) {
+                os_type_pie[ type_key] = 0;
+            }
+            os_type_pie[ type_key ] += 1;
+
+            // -- let's do an AJAX call to get the status of the element as well,  remember that the status array will get
+            //    populated asynchronously
+            uptimeGetElementStatus(item_id, refreshStatus);
+        });
+
+        $("#num_elements").html(total_num_elements);
+        $("#num_monitors").html(total_num_monitors);
+
+        // -- let's create our DataTables of elements loaded
+        $("#element_list").dataTable({
+            "aaSorting":[
+                [ 0, "asc" ]
+            ]
+        });
+        $("#element_list").show();
+        $("#loading_spinner").hide();
+
+        for (var key in os_type_pie) {
+            $("#type_group_list_tbody").append("<tr><td>" + key + "</td><td>" + os_type_pie[key] + "</td></tr>");
+        }
+
+        // -- let's create the DataTable for the number of elements by OS type
+        $("#type_group_list_table").dataTable({
+            "aaSorting":[
+                [ 1, "desc" ]
+            ]
+        });
+        $("#type_group_list_table").show();
+
+    }
+
+    // -- this function is a callback from the up.time API uptimeLoadGroups(), once the
+    //    JSON data structure is returned from the monitoring station, this function is called.
+    function groupDisplay(json) {
+        // -- we need to convert a flat array of items into a tree structure so that JsTree can use it
+        var data = groupsToJsTree(json)
+
+        // -- let's update the counter on the screen
+        $("#num_groups").html(total_num_groups);
+
+        // -- let's render the jstree
+        $("#group_tree").jstree({
+            json_data:{ data:data },
+            plugins:[ "themes", "json_data", "types", "ui", "dnd", "sort" ]
+        });
+        // -- 'data' is the json tree structure that can be parsed by the d3 code
+        // -- TODO:: need to keep a deep copied version of the data tree - d3 mangles it
+        var data2 = $.extend( true, [], data );
+        d3_charts['dashboard'].draw(d3_charts['dashboard'].div_id, data2);
+        var data3 = $.extend( true, [], data );
+        d3_charts['nodetree'].draw(d3_charts['nodetree'].div_id, data3);
+        var data4 = $.extend( true, [], data );
+        d3_charts['forcedirected'].draw(d3_charts['forcedirected'].div_id, data4);
+        var data5 = $.extend( true, [], data );
+        d3_charts['layouttree'].draw(d3_charts['layouttree'].div_id, data5);
+        //var data6 = $.extend( true, [], data );
+        //d3_charts['flarecircle'].draw(d3_charts['flarecircle'].div_id, data6);
+
+        // -- signal that we're all done loading the elements
+        $(document).trigger('elements_loaded');
+    }
+
+    function refreshStatus(data) {
+        var data_id = data.id;
+        element_status[data_id] = data;
+        if (data.id == total_num_elements) {
+            // -- we are at the end of requesting our status updates, so tell the d3_charts to
+            //    update themselves
+            $(document).trigger('update_d3');
+        }
+    }
+
+    // -- this function is called by the jQuery .ajax routine if there is an error processing
+    //    a request to the server (e.g. network error, server crash, etc.
+    $("#ajaxerrors").ajaxError(function (event, request, settings, exception) {
+        $.jGrowl("Error: " + exception + " " + request.status);
+    });
+
+    // -- this function is called whenever a navigation bar is clicked, we're rendering each
+    //    item as it is clicked on
+    $(".select_menu").click(function () {
+        // -- we've picked a menu item, so hide all menu_* items and show the currently select id
+        $("div[id^='menu_']").hide();
+        var chart_to_show = $(this).attr('id');
+        var to_show = "#menu_" + chart_to_show;
+        $(to_show).show();
+    });
+
+    function setAPIDisplayInfo(d) {
+        $("#uptime_server_info").html("databaseHost: " + d.databaseHost + "<br>databaseName:" + d.databaseName + "<br>databaseVersion:" + d.databaseVersion + "<br>host: " + d.host + "<br>API Version: " + d.version);
+    }
+
+    // ----------------------------------------------------------------------------------
+
+    // -- run these functions on page load
+    uptimeGetAPIInfo(setAPIDisplayInfo);
+
+    $.jGrowl("Loading elements...");
+    $("#loading_spinner").show();
+
+    // -- let's set up our charts
+    d3_charts['dashboard'] = { "div_id":"#dashboard_chart", "draw":d3_dendrogram };
+    d3_charts['forcedirected'] = { "div_id":"#forcedirected_chart", "draw":d3_forcedirected };
+    d3_charts['nodetree'] = { "div_id":"#nodetree_chart", "draw":d3_nodetree };
+    d3_charts['layouttree'] = { "div_id":"#layouttree_chart", "draw":d3_layouttree };
+    // d3_charts['flarecircle'] = { "div_id":"#flarecircle_chart", "draw":d3_flarecircle };
+
+    // -- pass in a callback function, remember ajax is asynchronous so we can't wait for results (and don't want to block)
+    uptimeLoadElements(displayResults);
+    uptimeLoadGroups(groupDisplay);
+
+    // -- an information event triggered by the load elements callback
+    $(document).bind('elements_loaded', function () {
+        $.jGrowl('Elements loaded');
+        $.jGrowl('Querying status information...')
+    });
+
+    // -- this function updates the colours of all the D3 charts once the status information
+    //    has been loaded asynchronously via AJAX
+    function d3_update(div_id) {
+        /* -- we will need to iterate through each d3 chart to update the status */
+        c = d3.select(div_id);
+        c.selectAll('circle').each(function (d) {
+            d3.select(this).style("fill", function (e) {
+                // -- we are missing elements in the array, need to populate groups and elements
+                try {
+                    status = status_colourmap(element_status[e.id].status);
+                } catch (f) {
+                    status = status_colourmap("unknown");
+                }
+                return status;
+            });
+        });
+    }
+
+    $(document).bind('update_d3', function () {
+        // -- let's select our d3 charts and update them with statues
+        $.jGrowl('Updating element status');
+        for ( var key in d3_charts ) {
+            d3_update(d3_charts[key].div_id);
+        }
+    });
+});
+
+</script>
+
+<!-- =================================================================================== -->
+
+<!-- you can tinker with the layout and contents to make your own dashboards -->
+</head>
+<body>
+<div class="pin_me">
+    <ul class="menu sgray">
+        <li><a href="#" id="dashboard" class="select_menu"><img
+                src="https://d2xxmxlur82g0z.cloudfront.net/static/images/home_12x12.png">dashboard</a></li>
+        <li><a href="#" id="datatables" class="select_menu">DataTable Demo</a></li>
+        <li><a href="#" id="jstree" class="select_menu">jsTree Demo</a></li>
+        <li><a href="#" id="nodetree" class="select_menu">Node-Tree Demo</a></li>
+        <li><a href="#" id="layouttree" class="select_menu">Layout Tree Demo </a></li>
+        <!--<li><a href="#" id="flarecircle" class="select_menu">Flare Circle Demo</a></li>-->
+        <li><a href="#" id="forcedirected" class="select_menu">Force Directed Demo</a></li>
+        <li class="floatr"><a href="#" class="select_menu"><img
+                src="https://d2xxmxlur82g0z.cloudfront.net/static/images/wrench_12x12.png"></a>
+
+            <div class="cols2">
+                <div class="col2">
+                    <h4>
+                        <up class="time">7.1 API demo</up>
+                    </h4>
+                </div>
+                <div class="col2">
+                    <div id="uptime_server_info"></div>
+                </div>
+            </div>
+        </li>
+    </ul>
+</div>
+<div id="spacer" style="height: 80px;"></div>
+<!--input#loadelements(type='button',class='button',value='Load Elements')-->
+<div id="loading_spinner" class="hide">Loading... <img id="spinner"
+                                                       src="https://d2xxmxlur82g0z.cloudfront.net/static/images/loading-onsquare.gif"
+                                                       width="16" height="16"></div>
+<div>
+    <div id="menu_dashboard">
+        <div class="messages">
+            <ul>
+                <li class='info'>
+                    <div>
+                        Number of elements: <b><span id="num_elements">0</span></b>, Number of groups: <b><span id="num_groups">0</span></b>, Number of monitors: <b><span id="num_monitors">0</span></b>
+                    </div>
+                    <br>
+                    <div>
+                        The up.time API has been called to retrieve all the elements that are currently visible, and once
+                        the list of elements has been retrieved, status calls are made via AJAX to the up.time monitoring station
+                        to request status updates.
+                    </div>
+                    <br>
+                    <div id="node_information">Click on a node for more information.
+                    </div>
+                </li>
+            </ul>
+        </div>
+        <div id="dashboard_chart"></div>
+    </div>
+    <div id="menu_datatables" class="hide">
+        <div id="type_group_list">
+            <table id="type_group_list_table" style="width:100%;" class="hide">
+                <thead>
+                <tr>
+                    <th>OS Type</th>
+                    <th>Number</th>
+                </tr>
+                </thead>
+                <tbody id="type_group_list_tbody"></tbody>
+                <tfoot></tfoot>
+            </table>
+        </div>
+        <div style="clear: none;">
+            <table id="element_list" style="width:100%;" class="hide">
+                <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>OS type</th>
+                </tr>
+                </thead>
+                <tbody id="element_list_tbody"></tbody>
+                <tfoot></tfoot>
+            </table>
+        </div>
+    </div>
+    <div id="menu_jstree" class="hide">
+        <div id="group_tree"></div>
+    </div>
+    <div id="menu_nodetree" class="hide">
+        <div id="nodetree_chart"></div>
+    </div>
+    <div id="menu_layouttree" class="hide">
+        <div id="layouttree_chart"></div>
+    </div>
+    <!--
+    <div id="menu_flarecircle" class="hide">
+        <div class="messages">
+            <ul>
+                <li class='info'>Systems are circles sized by duration of outage. </li>
+            </ul>
+        </div>
+        <div id="flarecircle_chart"></div>
+    </div>
+    -->
+    <div id="menu_forcedirected" class="hide">
+        <div id="forcedirected_chart"></div>
+    </div>
+    <div id="ajaxerrors"></div>
+</div>
+</body></html>

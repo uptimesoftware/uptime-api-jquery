@@ -1,7 +1,7 @@
 uptime-api-jquery
 =================
 
-Welcome to the RESTful API for up.time 7.1+.  This repository contains examples that use D3 charts
+Welcome to the RESTful API for up.time 7.2+.  This repository contains examples that use D3 charts
 to render status information retrieved from an up.time monitoring station.  Using the up.time API, you
 can create your own dashboards for visualizing the current state of your environment.
 
@@ -15,14 +15,23 @@ The up.time crew
 Setting up
 ----------
 
-To get the API working with your up.time monitoring station, clone the code in this repository to your /GUI
-directory (maybe into a subdirectory called /dashboards or something informative). You'll also need to make a
-few mods to your httpd.conf file (see KB article [need ref]).
+To get the API working with your up.time monitoring station, clone the code in this repository to your monitoring station's /GUI directory (maybe into a subdirectory called /dashboards or something informative). 
+
+On your monitoring station (Linux example), clone from Git:
+
+    $ cd /usr/local/uptime/GUI
+    $ git clone https://github.com/uptimesoftware/uptime-api-jquery.git
+
+If you see this kind error message in your browser when trying to load the uptime-api.html file:
+
+    XMLHttpRequest cannot load https://uptime-demo.uptimesoftware.com:9997/api/v1/elements?_=1378927010639. Origin null is not allowed by Access-Control-Allow-Origin.
+
+This means that you are trying to access the up.time monitoring station API from a machine that isn't the up.time core.  This commonly happens when you load the examples from a file rather than via http:// from the monitoring station.
 
 Using the API
 -------------
 
-Using the jQuery API is relatively straightforward: include the API .js file and make a call.
+Using the jQuery API is relatively straightforward: include the API .js file and make a call.  Ensure that you edit the uptimeSetAPIInfo(...) call to contain the hostname of your monitoring station.
 
 ```javascript
 <script type='text/javascript' src='uptime-api-v1.0.js'></script>

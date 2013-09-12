@@ -19,8 +19,12 @@ To get the API working with your up.time monitoring station, clone the code in t
 
 On your monitoring station (Linux example), clone from Git:
 
-    $ cd /usr/local/uptime/GUI
+    $ cd /usr/local/uptime/GUI/dashboards
     $ git clone https://github.com/uptimesoftware/uptime-api-jquery.git
+
+Browse to:
+
+    http://<uptimemonitoringstation>:9999/GUI/dashboards/uptime-api.html
 
 If you see this kind error message in your browser when trying to load the uptime-api.html file:
 
